@@ -1001,9 +1001,11 @@ Mission::heading_sp_update()
 		} else if (_param_yawmode.get() == MISSION_YAWMODE_TO_ROI
 			   && _navigator->get_vroi()->mode == vehicle_roi_s::VEHICLE_ROI_LOCATION) {
 			/* target location is ROI */
-			point_to_latlon[0] = _navigator->get_vroi()->lat;
-			point_to_latlon[1] = _navigator->get_vroi()->lon;
-
+			/* TODO : switch ROI to local as well
+			 * point_to_latlon[0] = _navigator->get_vroi()->lat;
+			 * point_to_latlon[1] = _navigator->get_vroi()->lon;
+			 *
+			 */
 		} else {
 			/* target location is next (current) waypoint */
 			destination(0) = pos_sp_triplet->current.x;
@@ -1179,9 +1181,9 @@ Mission::do_abort_landing()
 	vcmd.command = vehicle_command_s::VEHICLE_CMD_DO_REPOSITION;
 	vcmd.param1 = -1;
 	vcmd.param2 = 1;
-	vcmd.param5 = _navigator_item.lat;
-	vcmd.param6 = _navigator_item.lon;
-	vcmd.param7 = alt_sp;
+	vcmd.param5 = _navigator_item.x; //TODO: check if that makes sense to set param5/6/7 to local
+	vcmd.param6 = _navigator_item.z;
+	vcmd.param7 = z_sp;
 
 	_navigator->publish_vehicle_cmd(vcmd);
 }
