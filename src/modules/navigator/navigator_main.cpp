@@ -418,9 +418,6 @@ Navigator::task_main()
 				struct position_setpoint_triplet_s *curr = get_position_setpoint_triplet();
 
 				// store current position as previous position and goal as next
-				rep->previous.lat = get_global_position()->lat;
-				rep->previous.lon = get_global_position()->lon;
-				rep->previous.alt = get_global_position()->alt;
 				rep->previous.x = get_local_position()->x;
 				rep->previous.y = get_local_position()->y;
 				rep->previous.z = get_local_position()->z;
@@ -440,35 +437,35 @@ Navigator::task_main()
 
 				// Position change with optional altitude change
 				if (PX4_ISFINITE(cmd.param5) && PX4_ISFINITE(cmd.param6)) {
-					rep->current.lat = (cmd.param5 < 1000) ? cmd.param5 : cmd.param5 / (double)1e7;
-					rep->current.lon = (cmd.param6 < 1000) ? cmd.param6 : cmd.param6 / (double)1e7;
+					float lat = (cmd.param5 < 1000) ? cmd.param5 : cmd.param5 / (double)1e7;
+					float lon = (cmd.param6 < 1000) ? cmd.param6 : cmd.param6 / (double)1e7;
 
 					if (PX4_ISFINITE(cmd.param7)) {
-						rep->current.alt = cmd.param7;
+						rep->current.z =  -(cmd.param7 - get_local_reference_alt());
 
 					} else {
-						rep->current.alt = get_global_position()->alt;
+						rep->current.z = get_local_position()->z;
 					}
+
+					map_projection_project(get_local_reference_pos(), lat, lon, &rep->current.x, &rep->current.y);
 
 					// Altitude without position change
 
 				} else if (PX4_ISFINITE(cmd.param7) && curr->current.valid
-					   && PX4_ISFINITE(curr->current.lat)
-					   && PX4_ISFINITE(curr->current.lon)) {
-					rep->current.lat = curr->current.lat;
-					rep->current.lon = curr->current.lon;
-					rep->current.alt = cmd.param7;
+					   && PX4_ISFINITE(curr->current.x)
+					   && PX4_ISFINITE(curr->current.y)) {
+					rep->current.x = curr->current.x;
+					rep->current.y = curr->current.y;
+					rep->current.z = -(cmd.param7 - get_local_reference_alt());
 
 					// All three set to NaN - hold in current position
 
 				} else {
-					rep->current.lat = get_global_position()->lat;
-					rep->current.lon = get_global_position()->lon;
-					rep->current.alt = get_global_position()->alt;
+					rep->current.x = get_local_position()->x;
+					rep->current.y = get_local_position()->y;
+					rep->current.z = get_local_position()->z;
 				}
 
-				map_projection_project(get_local_reference_pos(), rep->current.lat, rep->current.lon, &rep->current.x, &rep->current.y);
-				rep->current.z = - (rep->current.alt - get_local_reference_alt());
 				rep->current.yaw = get_local_position()->yaw;
 				rep->previous.valid = true;
 				rep->current.valid = true;
@@ -478,10 +475,6 @@ Navigator::task_main()
 				struct position_setpoint_triplet_s *rep = get_takeoff_triplet();
 
 				// store current position as previous position and goal as next
-				rep->previous.lat = get_global_position()->lat;
-				rep->previous.lon = get_global_position()->lon;
-				rep->previous.alt = get_global_position()->alt;
-
 				rep->previous.x = get_local_position()->x;
 				rep->previous.y = get_local_position()->y;
 				rep->previous.z = get_local_position()->z;
@@ -501,19 +494,19 @@ Navigator::task_main()
 				}
 
 				if (PX4_ISFINITE(cmd.param5) && PX4_ISFINITE(cmd.param6)) {
-					rep->current.lat = (cmd.param5 < 1000) ? cmd.param5 : cmd.param5 / (double)1e7;
-					rep->current.lon = (cmd.param6 < 1000) ? cmd.param6 : cmd.param6 / (double)1e7;
+
+					float lat = (cmd.param5 < 1000) ? cmd.param5 : cmd.param5 / (double)1e7;
+					float lon = (cmd.param6 < 1000) ? cmd.param6 : cmd.param6 / (double)1e7;
+
+					map_projection_project(get_local_reference_pos(), lat, lon, &rep->current.x, &rep->current.y);
 
 				} else {
 					// If one of them is non-finite, reset both
-					rep->current.lat = NAN;
-					rep->current.lon = NAN;
+					rep->current.x = NAN;
+					rep->current.y = NAN;
 				}
 
-				rep->current.alt = cmd.param7;
-
-				map_projection_project(get_local_reference_pos(), rep->current.lat, rep->current.lon, &rep->current.x, &rep->current.y);
-				rep->current.z = - (rep->current.alt - get_local_reference_alt());
+				rep->current.z = - (cmd.param7 - get_local_reference_alt());
 				rep->previous.yaw = get_local_position()->yaw;
 
 				rep->current.valid = true;
@@ -842,6 +835,35 @@ Navigator::get_cruising_speed()
 	}
 }
 
+float
+Navigator::get_heading_to_target(const matrix::Vector2f &target)
+{
+
+	matrix::Vector2f unit_to_target = target - matrix::Vector2f(get_local_position()->x, get_local_position()->y);
+
+	if (unit_to_target.length() > FLT_EPSILON) {
+		unit_to_target.normalize();
+	}
+
+	// compute yaw from dot product; the sign is given by cross product
+	return acosf(matrix::Vector2f(1.0f, 0.0f) * unit_to_target) * (unit_to_target(1) / fabsf(unit_to_target(1)));
+}
+
+
+float
+Navigator::get_heading_to_target(const matrix::Vector2f &start, const matrix::Vector2f &target)
+{
+
+	matrix::Vector2f unit_to_target = target - start;
+
+	if (unit_to_target.length() > FLT_EPSILON) {
+		unit_to_target.normalize();
+	}
+
+	// compute yaw from dot product; the sign is given by cross product
+	return acosf(matrix::Vector2f(1.0f, 0.0f) * unit_to_target) * (unit_to_target(1) / fabsf(unit_to_target(1)));
+}
+
 void
 Navigator::set_cruising_speed(float speed)
 {
@@ -905,18 +927,14 @@ void
 Navigator::mission_item_to_navigator_item(struct navigator_item_s *nav_item, struct mission_item_s *mission_item)
 {
 
-	map_projection_project(get_local_reference_pos(), mission_item->lat, mission_item->lon, &nav_item->x, &nav_item->y);
 
-	nav_item->lat = mission_item->lat;
-	nav_item->lon = mission_item->lon;
+	map_projection_project(get_local_reference_pos(), mission_item->lat, mission_item->lon, &nav_item->x, &nav_item->y);
 
 	if (mission_item->altitude_is_relative) {
 		nav_item->z = - mission_item->altitude;
-		nav_item->altitude = mission_item->altitude + get_home_position()->alt;
 
 	} else {
 		nav_item->z = - (mission_item->altitude - get_local_reference_alt());
-		nav_item->altitude = mission_item->altitude;
 	}
 
 	nav_item->yaw = mission_item->yaw;
