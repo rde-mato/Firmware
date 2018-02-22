@@ -71,13 +71,13 @@
 #include <uORB/topics/debug_vect.h>
 #include <uORB/topics/airspeed.h>
 #include <uORB/topics/battery_status.h>
-#include <uORB/topics/vehicle_force_setpoint.h>
 #include <uORB/topics/time_offset.h>
 #include <uORB/topics/distance_sensor.h>
 #include <uORB/topics/follow_target.h>
 #include <uORB/topics/transponder_report.h>
 #include <uORB/topics/gps_inject_data.h>
 #include <uORB/topics/collision_report.h>
+#include <uORB/topics/obstacle_distance.h>
 
 #include "mavlink_mission.h"
 #include "mavlink_parameters.h"
@@ -115,10 +115,16 @@ public:
 
 private:
 
-	void acknowledge(uint8_t sysid, uint8_t compid, uint16_t command, int ret);
+	void acknowledge(uint8_t sysid, uint8_t compid, uint16_t command, uint8_t result);
 	void handle_message(mavlink_message_t *msg);
 	void handle_message_command_long(mavlink_message_t *msg);
 	void handle_message_command_int(mavlink_message_t *msg);
+	/**
+	 * common method to handle both mavlink command types. T is one of mavlink_command_int_t or mavlink_command_long_t
+	 */
+	template<class T>
+	void handle_message_command_both(mavlink_message_t *msg, const T &cmd_mavlink,
+					 const vehicle_command_s &vehicle_command);
 	void handle_message_command_ack(mavlink_message_t *msg);
 	void handle_message_optical_flow_rad(mavlink_message_t *msg);
 	void handle_message_hil_optical_flow(mavlink_message_t *msg);
@@ -128,7 +134,6 @@ private:
 	void handle_message_gps_global_origin(mavlink_message_t *msg);
 	void handle_message_attitude_quaternion_cov(mavlink_message_t *msg);
 	void handle_message_local_position_ned_cov(mavlink_message_t *msg);
-	void handle_message_quad_swarm_roll_pitch_yaw_thrust(mavlink_message_t *msg);
 	void handle_message_set_position_target_local_ned(mavlink_message_t *msg);
 	void handle_message_set_actuator_control_target(mavlink_message_t *msg);
 	void handle_message_set_attitude_target(mavlink_message_t *msg);
@@ -137,7 +142,6 @@ private:
 	void handle_message_rc_channels_override(mavlink_message_t *msg);
 	void handle_message_heartbeat(mavlink_message_t *msg);
 	void handle_message_ping(mavlink_message_t *msg);
-	void handle_message_request_data_stream(mavlink_message_t *msg);
 	void handle_message_system_time(mavlink_message_t *msg);
 	void handle_message_timesync(mavlink_message_t *msg);
 	void handle_message_hil_sensor(mavlink_message_t *msg);
@@ -152,6 +156,7 @@ private:
 	void handle_message_serial_control(mavlink_message_t *msg);
 	void handle_message_logging_ack(mavlink_message_t *msg);
 	void handle_message_play_tune(mavlink_message_t *msg);
+	void handle_message_obstacle_distance(mavlink_message_t *msg);
 	void handle_message_named_value_float(mavlink_message_t *msg);
 	void handle_message_debug(mavlink_message_t *msg);
 	void handle_message_debug_vect(mavlink_message_t *msg);
@@ -207,12 +212,10 @@ private:
 	struct vehicle_local_position_s _hil_local_pos;
 	struct vehicle_land_detected_s _hil_land_detector;
 	struct vehicle_control_mode_s _control_mode;
-	struct actuator_armed_s _actuator_armed;
 	orb_advert_t _global_pos_pub;
 	orb_advert_t _local_pos_pub;
 	orb_advert_t _attitude_pub;
 	orb_advert_t _gps_pub;
-	orb_advert_t _sensors_pub;
 	orb_advert_t _gyro_pub;
 	orb_advert_t _accel_pub;
 	orb_advert_t _mag_pub;
@@ -226,10 +229,8 @@ private:
 	orb_advert_t _distance_sensor_pub;
 	orb_advert_t _offboard_control_mode_pub;
 	orb_advert_t _actuator_controls_pub;
-	orb_advert_t _global_vel_sp_pub;
 	orb_advert_t _att_sp_pub;
 	orb_advert_t _rates_sp_pub;
-	orb_advert_t _force_sp_pub;
 	orb_advert_t _pos_sp_triplet_pub;
 	orb_advert_t _att_pos_mocap_pub;
 	orb_advert_t _vision_position_pub;
@@ -237,6 +238,7 @@ private:
 	orb_advert_t _telemetry_status_pub;
 	orb_advert_t _rc_pub;
 	orb_advert_t _manual_pub;
+	orb_advert_t _obstacle_distance_pub;
 	orb_advert_t _land_detector_pub;
 	orb_advert_t _time_offset_pub;
 	orb_advert_t _follow_target_pub;
@@ -257,8 +259,6 @@ private:
 	float _hil_local_alt0;
 	struct map_projection_reference_s _hil_local_proj_ref;
 	struct offboard_control_mode_s _offboard_control_mode;
-	struct vehicle_attitude_setpoint_s _att_sp;
-	struct vehicle_rates_setpoint_s _rates_sp;
 	double _time_offset_avg_alpha;
 	int64_t _time_offset;
 	int	_orb_class_instance;

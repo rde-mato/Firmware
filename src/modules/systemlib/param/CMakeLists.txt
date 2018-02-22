@@ -51,7 +51,10 @@ endif()
 set(module_list)
 if (DISABLE_PARAMS_MODULE_SCOPING)
 	# search all directories with .c files (potentially containing parameters)
-	file(GLOB_RECURSE new_list ${PX4_SOURCE_DIR}/src/*.c)
+	file(GLOB_RECURSE new_list
+		${PX4_SOURCE_DIR}/src/*.c
+		${external_module_paths}
+		)
 	foreach(file_path ${new_list})
 		get_filename_component(dir_path ${file_path} PATH)
 		list(APPEND module_list "${dir_path}")
@@ -59,19 +62,38 @@ if (DISABLE_PARAMS_MODULE_SCOPING)
 	list(REMOVE_DUPLICATES module_list)
 else()
 	foreach(module ${config_module_list})
+		# include all subdirectories as well
+		file(GLOB children RELATIVE ${PX4_SOURCE_DIR}/src/${module} ${PX4_SOURCE_DIR}/src/${module}/*)
+		foreach(child ${children})
+			if(IS_DIRECTORY ${PX4_SOURCE_DIR}/src/${module}/${child})
+				list(APPEND module_list ${PX4_SOURCE_DIR}/src/${module}/${child})
+			endif()
+		endforeach()
+
 		list(APPEND module_list ${PX4_SOURCE_DIR}/src/${module})
 	endforeach()
+
+	list(APPEND module_list ${external_module_paths})
 endif()
+
+list(REMOVE_DUPLICATES module_list)
 
 set(parameters_xml ${PX4_BINARY_DIR}/parameters.xml)
 file(GLOB_RECURSE param_src_files ${PX4_SOURCE_DIR}/src/*params.c)
 add_custom_command(OUTPUT ${parameters_xml}
-	COMMAND ${PYTHON_EXECUTABLE} ${PX4_SOURCE_DIR}/Tools/px_process_params.py
-		-s ${module_list} ${EXTERNAL_MODULES_LOCATION}
-		--board CONFIG_ARCH_${BOARD} --xml --inject-xml
+	COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/px_process_params.py
+		--src-path ${module_list}
+		--xml ${parameters_xml}
+		--inject-xml ${CMAKE_CURRENT_SOURCE_DIR}/parameters_injected.xml
 		--overrides ${PARAM_DEFAULT_OVERRIDES}
-	DEPENDS ${param_src_files} ${PX4_SOURCE_DIR}/Tools/px_process_params.py
-	WORKING_DIRECTORY ${PX4_BINARY_DIR}
+		#--verbose
+	DEPENDS
+		${param_src_files}
+		parameters_injected.xml
+		px4params/srcparser.py
+		px4params/srcscanner.py
+		px4params/xmlout.py
+		px_process_params.py
 	COMMENT "Generating parameters.xml"
 )
 add_custom_target(parameters_xml DEPENDS ${parameters_xml})
@@ -82,12 +104,10 @@ add_custom_command(OUTPUT px4_parameters.c px4_parameters.h
 		--xml ${parameters_xml} --dest ${CMAKE_CURRENT_BINARY_DIR}
 	DEPENDS
 		${PX4_BINARY_DIR}/parameters.xml
-		${CMAKE_CURRENT_SOURCE_DIR}/px_generate_params.py
-		${CMAKE_CURRENT_SOURCE_DIR}/templates/px4_parameters.c.jinja
-		${CMAKE_CURRENT_SOURCE_DIR}/templates/px4_parameters.h.jinja
+		px_generate_params.py
+		templates/px4_parameters.c.jinja
+		templates/px4_parameters.h.jinja
 	)
-set_source_files_properties(px4_parameters.c PROPERTIES GENERATED TRUE)
-set_source_files_properties(px4_parameters.h PROPERTIES GENERATED TRUE)
 
 px4_add_module(
 	MODULE modules__systemlib__param
@@ -102,4 +122,3 @@ px4_add_module(
 	DEPENDS
 		platforms__common
 	)
-# vim: set noet ft=cmake fenc=utf-8 ff=unix :

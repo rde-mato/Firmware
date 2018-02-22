@@ -75,17 +75,12 @@
 
 using namespace DriverFramework;
 
-namespace Commander
+namespace Preflight
 {
 
 static int check_calibration(DevHandle &h, const char *param_template, int &devid)
 {
-	bool calibration_found;
-
-	/* new style: ask device for calibration state */
-	int ret = h.ioctl(SENSORIOCCALTEST, 0);
-
-	calibration_found = (ret == OK);
+	bool calibration_found = false;
 
 	devid = h.ioctl(DEVIOCGDEVICEID, 0);
 
@@ -103,7 +98,7 @@ static int check_calibration(DevHandle &h, const char *param_template, int &devi
 		}
 
 		/* if param get succeeds */
-		int calibration_devid;
+		int32_t calibration_devid;
 
 		if (!param_get(parm, &(calibration_devid))) {
 
@@ -453,42 +448,6 @@ out:
 	return success;
 }
 
-static bool gnssCheck(orb_advert_t *mavlink_log_pub, bool report_fail, bool &lock_detected)
-{
-	bool success = true;
-	lock_detected = false;
-	int gpsSub = orb_subscribe(ORB_ID(vehicle_gps_position));
-
-	//Wait up to 2000ms to allow the driver to detect a GNSS receiver module
-	px4_pollfd_struct_t fds[1];
-	fds[0].fd = gpsSub;
-	fds[0].events = POLLIN;
-
-	if (px4_poll(fds, 1, 2000) <= 0) {
-		success = false;
-
-	} else {
-		struct vehicle_gps_position_s gps;
-
-		if ((OK != orb_copy(ORB_ID(vehicle_gps_position), gpsSub, &gps)) ||
-		    (hrt_elapsed_time(&gps.timestamp) > 1000000)) {
-			success = false;
-		} else if (gps.fix_type >= 3) {
-			lock_detected = true;
-		}
-	}
-
-	//Report failure to detect module
-	if (!success) {
-		if (report_fail) {
-			mavlink_log_critical(mavlink_log_pub, "PREFLIGHT FAIL: GPS RECEIVER MISSING");
-		}
-	}
-
-	orb_unsubscribe(gpsSub);
-	return success;
-}
-
 static bool ekf2Check(orb_advert_t *mavlink_log_pub, bool optional, bool report_fail, bool enforce_gps_required)
 {
 	bool success = true; // start with a pass and change to a fail if any test fails
@@ -499,6 +458,15 @@ static bool ekf2Check(orb_advert_t *mavlink_log_pub, bool optional, bool report_
 	estimator_status_s status = {};
 
 	if (orb_copy(ORB_ID(estimator_status), sub, &status) != PX4_OK) {
+		goto out;
+	}
+
+	// Check if preflight check perfomred by estimator has failed
+	if (status.pre_flt_fail) {
+		if (report_fail) {
+			mavlink_log_critical(mavlink_log_pub, "PREFLIGHT FAIL: EKF INTERNAL CHECKS");
+		}
+		success = false;
 		goto out;
 	}
 
@@ -532,32 +500,6 @@ static bool ekf2Check(orb_advert_t *mavlink_log_pub, bool optional, bool report_
 		goto out;
 	}
 
-	// If GPS aiding is required, declare fault condition if the EKF is not using GPS
-	if (enforce_gps_required) {
-		bool ekf_gps_fusion = status.control_mode_flags & (1 << 2);
-		if (!ekf_gps_fusion) {
-			if (report_fail) {
-				mavlink_log_critical(mavlink_log_pub, "PREFLIGHT FAIL: EKF NOT USING GPS");
-			}
-			success = false;
-			goto out;
-		}
-	}
-
-	// If GPS aiding is required, declare fault condition if the required GPS quality checks are failing
-	if (enforce_gps_required) {
-		if ((status.gps_check_fail_flags & ((1 << estimator_status_s::GPS_CHECK_FAIL_MIN_SAT_COUNT)
-						    + (1 << estimator_status_s::GPS_CHECK_FAIL_MIN_GDOP)
-						    + (1 << estimator_status_s::GPS_CHECK_FAIL_MAX_HORZ_ERR)
-						    + (1 << estimator_status_s::GPS_CHECK_FAIL_MAX_VERT_ERR))) > 0) {
-			if (report_fail) {
-				mavlink_log_critical(mavlink_log_pub, "PREFLIGHT FAIL: GPS QUALITY CHECKS");
-			}
-			success = false;
-			goto out;
-		}
-	}
-
 	// check magnetometer innovation test ratio
 	param_get(param_find("COM_ARM_EKF_YAW"), &test_limit);
 	if (status.mag_test_ratio > test_limit) {
@@ -586,6 +528,40 @@ static bool ekf2Check(orb_advert_t *mavlink_log_pub, bool optional, bool report_
 		}
 		success = false;
 		goto out;
+	}
+
+	// If GPS aiding is required, declare fault condition if the required GPS quality checks are failing
+	if (enforce_gps_required) {
+		bool ekf_gps_fusion = status.control_mode_flags & (1 << 2);
+		bool ekf_gps_check_fail = status.gps_check_fail_flags > 0;
+		if (!ekf_gps_fusion) {
+			// The EKF is not using GPS
+			if (report_fail) {
+				if (ekf_gps_check_fail) {
+					// Poor GPS qulaity is the likely cause
+					mavlink_log_critical(mavlink_log_pub, "PREFLIGHT FAIL: GPS QUALITY POOR");
+				} else {
+					// Likely cause unknown
+					mavlink_log_critical(mavlink_log_pub, "PREFLIGHT FAIL: EKF NOT USING GPS");
+				}
+			}
+			success = false;
+			goto out;
+		} else {
+			// The EKF is using GPS so check for bad quality on key performance indicators
+			bool gps_quality_fail = ((status.gps_check_fail_flags & ((1 << estimator_status_s::GPS_CHECK_FAIL_MIN_SAT_COUNT)
+										 + (1 << estimator_status_s::GPS_CHECK_FAIL_MIN_GDOP)
+										 + (1 << estimator_status_s::GPS_CHECK_FAIL_MAX_HORZ_ERR)
+										 + (1 << estimator_status_s::GPS_CHECK_FAIL_MAX_VERT_ERR)
+										 + (1 << estimator_status_s::GPS_CHECK_FAIL_MAX_SPD_ERR))) > 0);
+			if (gps_quality_fail) {
+				if (report_fail) {
+					mavlink_log_critical(mavlink_log_pub, "PREFLIGHT FAIL: GPS QUALITY POOR");
+				}
+				success = false;
+				goto out;
+			}
+		}
 	}
 
 out:
@@ -745,7 +721,7 @@ bool preflightCheck(orb_advert_t *mavlink_log_pub, bool checkSensors, bool check
 
 	/* ---- IMU CONSISTENCY ---- */
 	if (checkSensors) {
-		if (!imuConsistencyCheck(mavlink_log_pub, reportFailures)) {
+		if (!imuConsistencyCheck(mavlink_log_pub, (reportFailures && !failed))) {
 			failed = true;
 		}
 	}
@@ -767,27 +743,15 @@ bool preflightCheck(orb_advert_t *mavlink_log_pub, bool checkSensors, bool check
 		}
 	}
 
-	/* ---- Global Navigation Satellite System receiver ---- */
-	static hrt_abstime _time_last_no_gps_lock = 0;
-	if (checkGNSS) {
-		bool lock_detected = false;
-		if (!gnssCheck(mavlink_log_pub, reportFailures, lock_detected)) {
-			failed = true;
-		}
-		if (!lock_detected) {
-			_time_last_no_gps_lock = time_since_boot;
-		}
-	}
-
 	/* ---- Navigation EKF ---- */
 	// only check EKF2 data if EKF2 is selected as the estimator and GNSS checking is enabled
 	int32_t estimator_type;
 	param_get(param_find("SYS_MC_EST_GROUP"), &estimator_type);
-	if (estimator_type == 2 && checkGNSS) {
-		// don't fail if not using GPS for the first 20s after gaining 3D lock because quality checks take time to pass
-		bool enforce_gps_required = (_time_last_no_gps_lock > 20 * 1000000);
+	if (estimator_type == 2) {
+		// don't report ekf failures for the first 10 seconds to allow time for the filter to start
+		bool report_ekf_fail = (time_since_boot > 10 * 1000000);
 
-		if (!ekf2Check(mavlink_log_pub, true, reportFailures, enforce_gps_required)) {
+		if (!ekf2Check(mavlink_log_pub, true, reportFailures && report_ekf_fail && !failed, checkGNSS)) {
 			failed = true;
 		}
 	}

@@ -53,7 +53,7 @@
 #include <math.h>
 
 #include <systemlib/err.h>
-#include <systemlib/mixer/mixer.h>
+#include <lib/mixer/mixer.h>
 #include <systemlib/pwm_limit/pwm_limit.h>
 #include <drivers/drv_hrt.h>
 #include <drivers/drv_pwm_output.h>
@@ -590,6 +590,8 @@ bool MixerTest::mixerTest()
 static int
 mixer_callback(uintptr_t handle, uint8_t control_group, uint8_t control_index, float &control)
 {
+	control = 0.0f;
+
 	if (control_group != 0) {
 		return -1;
 	}

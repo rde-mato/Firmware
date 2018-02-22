@@ -1,4 +1,3 @@
-include(nuttx/px4_impl_nuttx)
 
 px4_nuttx_configure(HWCLASS m4 CONFIG nsh ROMFS y ROMFSROOT tap_common)
 
@@ -8,24 +7,23 @@ set(config_module_list
 	#
 	# Board support modules
 	#
+	drivers/airspeed
+	drivers/boards
 	drivers/device
+	drivers/barometer
+	drivers/differential_pressure
+	drivers/gps
+	drivers/led
+	drivers/magnetometer/hmc5883
+	drivers/imu/mpu6000
+	drivers/px4fmu
+	drivers/rgbled_pwm
 	drivers/stm32
 	drivers/stm32/adc
 	drivers/stm32/tone_alarm
-	drivers/led
-	drivers/px4fmu
-	drivers/boards
-	drivers/rgbled_pwm
 	drivers/tap_esc
-	drivers/mpu6000
-	drivers/ms5611
-	drivers/hmc5883
-	drivers/gps
-	drivers/airspeed
-	drivers/ms4525_airspeed
-	drivers/ms5525_airspeed
-	modules/sensors
 	drivers/vmount
+	modules/sensors
 
 	#
 	# System commands
@@ -46,6 +44,7 @@ set(config_module_list
 	systemcmds/dumpfile
 	systemcmds/ver
 	systemcmds/topic_listener
+	systemcmds/tune_control
 
 	#
 	# General system control
@@ -80,7 +79,6 @@ set(config_module_list
 	#
 	modules/systemlib/param
 	modules/systemlib
-	modules/systemlib/mixer
 	modules/uORB
 	modules/dataman
 
@@ -88,25 +86,16 @@ set(config_module_list
 	# Libraries
 	#
 	lib/controllib
-	lib/mathlib
-	lib/mathlib/math/filter
+	lib/conversion
+	lib/DriverFramework/framework
 	lib/ecl
-	lib/external_lgpl
 	lib/geo
 	lib/geo_lookup
-	lib/conversion
-	lib/launchdetection
 	lib/led
+	lib/mathlib
+	lib/mixer
 	lib/rc
-	lib/runway_takeoff
-	lib/tailsitter_recovery
 	lib/terrain_estimation
+	lib/tunes
 	lib/version
-	lib/DriverFramework/framework
-	platforms/nuttx
-	lib/micro-CDR
-
-	# had to add for cmake, not sure why wasn't in original config
-	platforms/common
-	platforms/nuttx/px4_layer
 )

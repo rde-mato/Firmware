@@ -1,4 +1,6 @@
-include(posix/px4_impl_posix)
+include(common/px4_git)
+px4_add_git_submodule(TARGET git_cmake_hexagon PATH "cmake/cmake_hexagon")
+
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PX4_SOURCE_DIR}/cmake/cmake_hexagon")
 
@@ -34,6 +36,7 @@ set(config_module_list
 	systemcmds/mixer
 	systemcmds/ver
 	systemcmds/topic_listener
+	systemcmds/tune_control
 
 	modules/mavlink
 
@@ -47,7 +50,6 @@ set(config_module_list
 
 	modules/systemlib/param
 	modules/systemlib
-	modules/systemlib/mixer
 	modules/uORB
 	modules/muorb/krait
 	modules/sensors
@@ -58,25 +60,16 @@ set(config_module_list
 	modules/commander
 	modules/navigator
 
-	# micro RTPS
-	modules/micrortps_bridge/micrortps_client
-
 	lib/controllib
-	lib/mathlib
-	lib/mathlib/math/filter
 	lib/conversion
+	lib/DriverFramework/framework
 	lib/ecl
 	lib/geo
 	lib/geo_lookup
 	lib/led
+	lib/mathlib
+	lib/mixer
 	lib/terrain_estimation
-	lib/runway_takeoff
-	lib/tailsitter_recovery
+	lib/tunes
 	lib/version
-	lib/DriverFramework/framework
-	lib/micro-CDR
-
-	platforms/common
-	platforms/posix/px4_layer
-	platforms/posix/work_queue
 	)

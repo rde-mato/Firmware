@@ -1,4 +1,3 @@
-include(posix/px4_impl_posix)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PX4_SOURCE_DIR}/cmake/cmake_hexagon")
 
@@ -41,18 +40,13 @@ set(config_module_list
 
 	lib/controllib
 	lib/mathlib
-	lib/mathlib/math/filter
 	lib/ecl
 	lib/geo
 	lib/geo_lookup
 	lib/conversion
 	lib/version
 	lib/DriverFramework/framework
-	lib/micro-CDR
 
-	platforms/common
-	platforms/posix/px4_layer
-	platforms/posix/work_queue
 	modules/muorb/krait
 	)
 

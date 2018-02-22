@@ -31,6 +31,9 @@
  *
  ****************************************************************************/
 
+#pragma once
+
+#include <string.h>
 #include <drivers/device/i2c.h>
 #include <drivers/drv_airspeed.h>
 #include <drivers/drv_hrt.h>

@@ -58,7 +58,7 @@
 #include <px4_module.h>
 #include <systemlib/board_serial.h>
 #include <systemlib/circuit_breaker.h>
-#include <systemlib/mixer/mixer.h>
+#include <lib/mixer/mixer.h>
 #include <systemlib/param/param.h>
 #include <systemlib/perf_counter.h>
 #include <systemlib/pwm_limit/pwm_limit.h>
@@ -412,6 +412,8 @@ PX4FMU::PX4FMU(bool run_as_task) :
 
 	// rc input, published to ORB
 	_rc_in.input_source = input_rc_s::RC_INPUT_SOURCE_PX4FMU_PPM;
+	// initialize it as RC lost
+	_rc_in.rc_lost = true;
 
 	// initialize raw_rc values and count
 	for (unsigned i = 0; i < input_rc_s::RC_INPUT_MAX_CHANNELS; i++) {
@@ -1420,16 +1422,15 @@ PX4FMU::cycle()
 			 * We also need to arm throttle for the ESC calibration. */
 			_throttle_armed = (_safety_off && _armed.armed && !_armed.lockdown) ||
 					  (_safety_off && _armed.in_esc_calibration_mode);
+		}
 
+		/* update PWM status if armed or if disarmed PWM values are set */
+		bool pwm_on = _armed.armed || _num_disarmed_set > 0 || _armed.in_esc_calibration_mode;
 
-			/* update PWM status if armed or if disarmed PWM values are set */
-			bool pwm_on = _armed.armed || _num_disarmed_set > 0 || _armed.in_esc_calibration_mode;
+		if (_pwm_on != pwm_on) {
+			_pwm_on = pwm_on;
 
-			if (_pwm_on != pwm_on) {
-				_pwm_on = pwm_on;
-
-				update_pwm_out_state(pwm_on);
-			}
+			update_pwm_out_state(pwm_on);
 		}
 
 #ifdef RC_SERIAL_PORT
@@ -1440,24 +1441,27 @@ PX4FMU::cycle()
 			struct vehicle_command_s cmd;
 			orb_copy(ORB_ID(vehicle_command), _vehicle_cmd_sub, &cmd);
 
-			// Check for a DSM pairing command
-			if (((unsigned int)cmd.command == vehicle_command_s::VEHICLE_CMD_START_RX_PAIR) && ((int)cmd.param1 == 0)) {
+			// Check for a pairing command
+			if ((unsigned int)cmd.command == vehicle_command_s::VEHICLE_CMD_START_RX_PAIR) {
 				if (!_armed.armed) {
-					int dsm_bind_mode = (int)cmd.param2;
+					if ((int)cmd.param1 == 0) {
+						// DSM binding command
+						int dsm_bind_mode = (int)cmd.param2;
 
-					int dsm_bind_pulses = 0;
+						int dsm_bind_pulses = 0;
 
-					if (dsm_bind_mode == 0) {
-						dsm_bind_pulses = DSM2_BIND_PULSES;
+						if (dsm_bind_mode == 0) {
+							dsm_bind_pulses = DSM2_BIND_PULSES;
 
-					} else if (dsm_bind_mode == 1) {
-						dsm_bind_pulses = DSMX_BIND_PULSES;
+						} else if (dsm_bind_mode == 1) {
+							dsm_bind_pulses = DSMX_BIND_PULSES;
 
-					} else {
-						dsm_bind_pulses = DSMX8_BIND_PULSES;
+						} else {
+							dsm_bind_pulses = DSMX8_BIND_PULSES;
+						}
+
+						ioctl(nullptr, DSM_BIND_START, dsm_bind_pulses);
 					}
-
-					ioctl(nullptr, DSM_BIND_START, dsm_bind_pulses);
 
 				} else {
 					PX4_WARN("system armed, bind request rejected");
@@ -1611,12 +1615,18 @@ PX4FMU::cycle()
 					// The st24 will keep outputting RC channels and RSSI even if RC has been lost.
 					// The only way to detect RC loss is therefore to look at the lost_count.
 
-					if (rc_updated && lost_count == 0) {
-						// we have a new ST24 frame. Publish it.
-						_rc_in.input_source = input_rc_s::RC_INPUT_SOURCE_PX4FMU_ST24;
-						fill_rc_in(raw_rc_count, raw_rc_values, _cycle_timestamp,
-							   false, false, frame_drops, st24_rssi);
-						_rc_scan_locked = true;
+					if (rc_updated) {
+						if (lost_count == 0) {
+							// we have a new ST24 frame. Publish it.
+							_rc_in.input_source = input_rc_s::RC_INPUT_SOURCE_PX4FMU_ST24;
+							fill_rc_in(raw_rc_count, raw_rc_values, _cycle_timestamp,
+								   false, false, frame_drops, st24_rssi);
+							_rc_scan_locked = true;
+
+						} else {
+							// if the lost count > 0 means that there is an RC loss
+							_rc_in.rc_lost = true;
+						}
 					}
 				}
 
@@ -2661,37 +2671,9 @@ PX4FMU::gpio_set_function(uint32_t gpios, int function)
 	for (unsigned i = 0; i < _ngpio; i++) {
 		if (gpios & (1 << i)) {
 			switch (function) {
-			case GPIO_SET_INPUT:
-				if (_gpio_tab[i].input) {
-					px4_arch_configgpio(_gpio_tab[i].input);
-				}
-
-				break;
-
 			case GPIO_SET_OUTPUT:
 				if (_gpio_tab[i].output) {
 					px4_arch_configgpio(_gpio_tab[i].output);
-				}
-
-				break;
-
-			case GPIO_SET_OUTPUT_LOW:
-				if (_gpio_tab[i].output) {
-					px4_arch_configgpio((_gpio_tab[i].output & ~(GPIO_OUTPUT_SET)) | GPIO_OUTPUT_CLEAR);
-				}
-
-				break;
-
-			case GPIO_SET_OUTPUT_HIGH:
-				if (_gpio_tab[i].output) {
-					px4_arch_configgpio((_gpio_tab[i].output & ~(GPIO_OUTPUT_CLEAR)) | GPIO_OUTPUT_SET);
-				}
-
-				break;
-
-			case GPIO_SET_ALT_1:
-				if (_gpio_tab[i].alt != 0) {
-					px4_arch_configgpio(_gpio_tab[i].alt);
 				}
 
 				break;
@@ -2891,35 +2873,13 @@ PX4FMU::gpio_ioctl(struct file *filp, int cmd, unsigned long arg)
 		ret = gpio_reset();
 		break;
 
-	case GPIO_SENSOR_RAIL_RESET:
-		sensor_reset(arg);
-		break;
-
-	case GPIO_PERIPHERAL_RAIL_RESET:
-		peripheral_reset(arg);
-		break;
-
 	case GPIO_SET_OUTPUT:
-	case GPIO_SET_OUTPUT_LOW:
-	case GPIO_SET_OUTPUT_HIGH:
-	case GPIO_SET_INPUT:
-	case GPIO_SET_ALT_1:
 		ret = gpio_set_function(arg, cmd);
-		break;
-
-	case GPIO_SET_ALT_2:
-	case GPIO_SET_ALT_3:
-	case GPIO_SET_ALT_4:
-		ret = -EINVAL;
 		break;
 
 	case GPIO_SET:
 	case GPIO_CLEAR:
 		ret = gpio_write(arg, cmd);
-		break;
-
-	case GPIO_GET:
-		ret = gpio_read((uint32_t *)arg);
 		break;
 
 	default:

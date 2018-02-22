@@ -55,33 +55,34 @@ set(msg_files
 	esc_report.msg
 	esc_status.msg
 	estimator_status.msg
-	filtered_bottom_flow.msg
 	follow_target.msg
 	fw_pos_ctrl_status.msg
 	geofence_result.msg
 	gps_dump.msg
 	gps_inject_data.msg
-	hil_sensor.msg
 	home_position.msg
 	input_rc.msg
+	irlock_report.msg
+	landing_target_innovations.msg
+	landing_target_pose.msg
 	led_control.msg
 	log_message.msg
 	manual_control_setpoint.msg
 	mavlink_log.msg
-	mc_att_ctrl_status.msg
 	mission.msg
 	mission_result.msg
 	mount_orientation.msg
 	multirotor_motor_limits.msg
+	obstacle_distance.msg
 	offboard_control_mode.msg
 	optical_flow.msg
-	output_pwm.msg
 	parameter_update.msg
 	position_setpoint.msg
 	position_setpoint_triplet.msg
 	power_button_state.msg
 	pwm_input.msg
 	qshell_req.msg
+	rate_ctrl_status.msg
 	rc_channels.msg
 	rc_parameter_map.msg
 	safety.msg
@@ -104,6 +105,7 @@ set(msg_files
 	test_motor.msg
 	time_offset.msg
 	transponder_report.msg
+	tune_control.msg
 	uavcan_parameter_request.msg
 	uavcan_parameter_value.msg
 	ulog_stream.msg
@@ -113,7 +115,6 @@ set(msg_files
 	vehicle_command.msg
 	vehicle_command_ack.msg
 	vehicle_control_mode.msg
-	vehicle_force_setpoint.msg
 	vehicle_global_position.msg
 	vehicle_gps_position.msg
 	vehicle_land_detected.msg
@@ -127,20 +128,17 @@ set(msg_files
 	wind_estimate.msg
 	)
 
-px4_add_git_submodule(TARGET git_gencpp PATH "Tools/gencpp")
-px4_add_git_submodule(TARGET git_genmsg PATH "Tools/genmsg")
+px4_add_git_submodule(TARGET git_gencpp PATH tools/gencpp)
+px4_add_git_submodule(TARGET git_genmsg PATH tools/genmsg)
 
 # headers
 set(msg_out_path ${PX4_BINARY_DIR}/uORB/topics)
 set(msg_source_out_path	${CMAKE_CURRENT_BINARY_DIR}/topics_sources)
-#set(msg_source_files_out ${CMAKE_CURRENT_BINARY_DIR}/uORBTopics.cpp)
 
-set(msg_list)
 set(uorb_headers)
 set(uorb_sources ${msg_source_out_path}/uORBTopics.cpp)
 foreach(msg_file ${msg_files})
 	get_filename_component(msg ${msg_file} NAME_WE)
-	list(APPEND msg_list ${msg})
 	list(APPEND uorb_headers ${msg_out_path}/${msg}.h)
 	list(APPEND uorb_sources ${msg_source_out_path}/${msg}.cpp)
 endforeach()
@@ -178,12 +176,5 @@ add_custom_command(OUTPUT ${uorb_sources}
 	VERBATIM
 	)
 
-add_library(uorb_msgs STATIC EXCLUDE_FROM_ALL ${uorb_sources})
-add_dependencies(uorb_msgs uorb_headers prebuild_targets)
-
-# microCDR now part of uORB
-target_include_directories(uorb_msgs
-	PRIVATE ${PX4_SOURCE_DIR}/src/lib/micro-CDR/include
-	PRIVATE ${PX4_BINARY_DIR}/src/lib/micro-CDR/include/microcdr
-	)
-target_link_libraries(uorb_msgs PRIVATE lib__micro-CDR)
+px4_add_library(uorb_msgs ${uorb_sources})
+add_dependencies(uorb_msgs uorb_headers)

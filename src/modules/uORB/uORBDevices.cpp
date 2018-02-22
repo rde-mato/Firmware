@@ -170,6 +170,10 @@ uORB::DeviceNode::open(device::file_t *filp)
 		return ret;
 	}
 
+	if (FILE_FLAGS(filp) == 0) {
+		return CDev::open(filp);
+	}
+
 	/* can only be pub or sub, not both */
 	return -EINVAL;
 }
@@ -402,6 +406,11 @@ uORB::DeviceNode::ioctl(device::file_t *filp, int cmd, unsigned long arg)
 		} else {
 			*(unsigned *)arg = 0;
 		}
+
+		return OK;
+
+	case ORBIOCISPUBLISHED:
+		*(unsigned long *)arg = _published;
 
 		return OK;
 
@@ -918,6 +927,7 @@ uORB::DeviceMaster::ioctl(device::file_t *filp, int cmd, unsigned long arg)
 
 						if ((existing_node != nullptr) && !(existing_node->is_published())) {
 							/* nothing has been published yet, lets claim it */
+							existing_node->set_priority(adv->priority);
 							ret = PX4_OK;
 
 						} else {
