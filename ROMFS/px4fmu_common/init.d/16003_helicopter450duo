@@ -1,17 +1,20 @@
 #!nsh
 #
-# @name HK450
+# @name HK450DUO
 #
 # @type Helicopter
 # @class Copter
 #
 # @maintainer Bart Slinger <bartslinger@gmail.com>
 #
-# @output MAIN1 main motor
-# @output MAIN2 rear swashplate servo
-# @output MAIN3 right swashplate servo
-# @output MAIN4 left swashplate servo
-# @output MAIN5 tail-rotor servo
+# @output MAIN1 rear motor
+# @output MAIN2 rear rear swashplate servo
+# @output MAIN3 rear right swashplate servo
+# @output MAIN4 rear left swashplate servo
+# @output MAIN5 front motor
+# @output MAIN6 front front swashplate servo
+# @output MAIN7 front right swashplate servo
+# @output MAIN8 front left swashplate servo
 #
 
 sh /etc/init.d/rc.mc_defaults
@@ -19,7 +22,7 @@ sh /etc/init.d/rc.mc_defaults
 # Configure as helicopter (number 4 defined in commander_helper.cpp)
 set MAV_TYPE 4
 
-set MIXER HK450
+set MIXER HK450DUO
 
 #set PWM_OUT 1234
 
