@@ -1,20 +1,20 @@
 #!nsh
 #
-# @name HK450DUO
+# @name Temdem_Copter
 #
 # @type Helicopter
 # @class Copter
 #
 # @maintainer Bart Slinger <bartslinger@gmail.com>
 #
-# @output MAIN1 rear motor
-# @output MAIN2 rear rear swashplate servo
+# @output MAIN1 rear rear swashplate servo
+# @output MAIN2 rear left swashplate servo
 # @output MAIN3 rear right swashplate servo
-# @output MAIN4 rear left swashplate servo
-# @output MAIN5 front motor
-# @output MAIN6 front front swashplate servo
+# @output MAIN4 rear motor
+# @output MAIN5 front front swashplate servo
+# @output MAIN6 front left swashplate servo
 # @output MAIN7 front right swashplate servo
-# @output MAIN8 front left swashplate servo
+# @output MAIN8 front motor
 #
 
 sh /etc/init.d/rc.mc_defaults
@@ -22,9 +22,9 @@ sh /etc/init.d/rc.mc_defaults
 # Configure as helicopter (number 4 defined in commander_helper.cpp)
 set MAV_TYPE 4
 
-set MIXER HK450DUO
+set MIXER CCPM2
 
-#set PWM_OUT 1234
+set PWM_OUT 12345678
 
 if [ $AUTOCNF == yes ]
 then
@@ -59,4 +59,5 @@ then
 	param set CBRK_IO_SAFETY 22027
 fi
 
+set PWM_RATE 50
 set HIL no
