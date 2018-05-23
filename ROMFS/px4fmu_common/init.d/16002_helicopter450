@@ -7,11 +7,11 @@
 #
 # @maintainer Bart Slinger <bartslinger@gmail.com>
 #
-# @output MAIN1 main motor
-# @output MAIN2 rear swashplate servo
+# @output MAIN1 rear swashplate servo
+# @output MAIN2 left swashplate servo
 # @output MAIN3 right swashplate servo
-# @output MAIN4 left swashplate servo
-# @output MAIN5 tail-rotor servo
+# @output MAIN4 tail-rotor servo
+# @output MAIN5 main motor
 #
 
 sh /etc/init.d/rc.mc_defaults
@@ -21,7 +21,8 @@ set MAV_TYPE 4
 
 set MIXER HK450
 
-#set PWM_OUT 1234
+set PWM_RATE 50 
+set PWM_OUT 12345
 
 if [ $AUTOCNF == yes ]
 then

@@ -1131,6 +1131,10 @@ then
 # End of autostart
 fi
 
+pwm failsafe -c 1234 -p 1500
+pwm disarmed -c 1234 -p 1500
+pwm disarmed -c 5 -p 900
+
 # There is no further script processing, so we can free some RAM
 # XXX potentially unset all script variables.
 unset TUNE_ERR
