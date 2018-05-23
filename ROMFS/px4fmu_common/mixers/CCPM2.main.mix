@@ -40,3 +40,42 @@ M: 1
 O:      10000  10000      0 -10000  10000
 S: 0 3      0  20000 -10000 -10000  10000
 
+Output 4 - Front Servo Mixer for front rotor
+--------------------------------------------
+Rear Servo = Collective (Thrust - 3) - Elevator (Pitch - 1)
+
+M: 2
+O:      10000  10000      0 -10000  10000
+S: 0 3 -10000 -10000      0 -10000  10000
+S: 0 1 -10000 -10000      0 -10000  10000
+
+Output 5 - Left Servo Mixer for front rotor
+-------------------------------------------
+Left Servo = Collective (Thrust - 3) - 0.5 * Elevator (Pitch - 1) - 0.866 * Aileron (Roll - 0) - 0.5 * Rudder (Yaw - 2)
+
+M: 4
+O:       10000   10000      0 -10000  10000
+S: 0 3   10000   10000      0 -10000  10000
+S: 0 1   -5000   -5000      0 -10000  10000
+S: 0 0   -8660   -8660      0 -10000  10000
+S: 0 2   -5000   -5000      0 -10000  10000
+
+Output 6 - Right Servo Mixer for front rotor
+--------------------------------------------
+Right Servo = Collective (Thrust - 3) + 0.5 * Elevator (Pitch - 1) - 0.866 * Aileron (Roll - 0) - 0.5 Rudder (Yaw -2)
+
+M: 4
+O:       10000   10000      0 -10000  10000
+S: 0 3  -10000  -10000      0 -10000  10000
+S: 0 1    5000    5000      0 -10000  10000
+S: 0 0   -8660   -8660      0 -10000  10000
+S: 0 2   -5000   -5000      0 -10000  10000
+
+Output 7 - Motor speed mixer for front rotor
+--------------------------------------------
+This would be the motor speed control output from governor power demand - Mixed with Collective (Thrust - 3)
+
+M: 1
+O:      10000  10000      0 -10000  10000
+S: 0 3      0  20000 -10000 -10000  10000
+

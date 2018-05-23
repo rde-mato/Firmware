@@ -24,6 +24,7 @@ set MAV_TYPE 4
 
 set MIXER CCPM2
 
+set PWM_RATE 50
 set PWM_OUT 12345678
 
 if [ $AUTOCNF == yes ]
@@ -59,5 +60,4 @@ then
 	param set CBRK_IO_SAFETY 22027
 fi
 
-set PWM_RATE 50
 set HIL no
